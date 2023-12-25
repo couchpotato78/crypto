@@ -1,106 +1,78 @@
 document.addEventListener('DOMContentLoaded', function () {
-    // Replace 'YOUR_API_ENDPOINT' with the actual endpoint of your API
-    const apiEndpoint = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest';
+    // ... (existing code)
 
-    // Include your API key in the headers
-    const apiKey = '57bb5728-46ac-45ac-9840-3a1e709fa18b';
-    const headers = new Headers({
-        'X-CMC_PRO_API_KEY': apiKey,
-        'Content-Type': 'application/json',
-    });
+    // Check if the data contains a 'data' property
+    if (data && data.data) {
+        // Iterate over the list of cryptocurrencies
+        data.data.forEach(crypto => {
+            // Log each crypto object to the console
+            console.log('Crypto:', crypto);
 
-    // Fetch cryptocurrency data from your API
-    fetch(apiEndpoint, { headers })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            // Log the received data to the console
-            console.log('Received data:', data);
+            // Check if the required information is available
+            if (crypto.name && crypto.symbol && crypto.quote && crypto.quote.USD && crypto.quote.USD.price && crypto.last_updated) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${crypto.name}</td>
+                    <td>${crypto.symbol}</td>
+                    <td>${crypto.quote.USD.price.toFixed(2)}</td>
+                    <td>${new Date(crypto.last_updated).toLocaleString()}</td>
+                    <td><input type="text" value="0" class="amount-input" data-crypto-id="${crypto.id}" maxlength="8" /></td>
+                    <td class="total-value">0.00</td>
+                `;
+                tbody.appendChild(row);
 
-            // Get the table body
-            const tbody = document.querySelector('#cryptoTable tbody');
-
-            // Clear existing rows
-            tbody.innerHTML = '';
-
-            // Check if the data contains a 'data' property
-            if (data && data.data) {
-                // Iterate over the list of cryptocurrencies
-                data.data.forEach(crypto => {
-                    // Log each crypto object to the console
-                    console.log('Crypto:', crypto);
-
-                    // Check if the required information is available
-                    if (crypto.name && crypto.symbol && crypto.quote && crypto.quote.USD && crypto.quote.USD.price && crypto.last_updated) {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${crypto.name}</td>
-                            <td>${crypto.symbol}</td>
-                            <td>${crypto.quote.USD.price.toFixed(2)}</td>
-                            <td>${new Date(crypto.last_updated).toLocaleString()}</td>
-                            <td><input type="text" value="0" class="amount-input" data-crypto-id="${crypto.id}" /></td>
-                            <td class="total-value">0.00</td>
-                        `;
-                        tbody.appendChild(row);
-
-                        // Add an event listener to the input field for amount
-                        const amountInput = row.querySelector('.amount-input');
-                        amountInput.addEventListener('change', () => {
-                            updateTotalValue(row);
-                            updateTotalPortfolioValue();
-                        });
-
-                        // Load previously entered amount from localStorage
-                        const storedAmount = localStorage.getItem(`crypto-${crypto.id}`);
-                        if (storedAmount !== null) {
-                            amountInput.value = storedAmount;
-                            updateTotalValue(row);
-                            updateTotalPortfolioValue();
-                        }
-                    }
+                // Add an event listener to the input field for amount
+                const amountInput = row.querySelector('.amount-input');
+                amountInput.addEventListener('change', () => {
+                    updateTotalValue(row);
+                    updateTotalPortfolioValue();
+                    saveChanges(row);
                 });
-            } else {
-                console.error('Unexpected data format:', data);
+
+                // Load previously entered amount from localStorage
+                const storedAmount = localStorage.getItem(`crypto-${crypto.id}`);
+                if (storedAmount !== null) {
+                    amountInput.value = storedAmount;
+                    updateTotalValue(row);
+                    updateTotalPortfolioValue();
+                }
             }
-
-            // Update total portfolio value initially
-            updateTotalPortfolioValue();
-        })
-        .catch(error => console.error('Error fetching data:', error));
-});
-
-function updateTotalValue(row) {
-    const priceCell = row.cells[2];
-    const amountInput = row.querySelector('.amount-input');
-    const totalValueCell = row.cells[5]; // Update the index to target the correct cell
-
-    const price = parseFloat(priceCell.textContent);
-    const amount = parseFloat(amountInput.value);
-
-    if (!isNaN(price) && !isNaN(amount)) {
-        const totalValue = (price * amount).toFixed(2);
-        totalValueCell.textContent = totalValue;
-
-        // Save the entered amount to localStorage
-        const cryptoId = amountInput.getAttribute('data-crypto-id');
-        localStorage.setItem(`crypto-${cryptoId}`, amountInput.value);
+        });
     } else {
-        totalValueCell.textContent = '0.00';
+        console.error('Unexpected data format:', data);
     }
-}
 
-function updateTotalPortfolioValue() {
-    const totalValueCells = document.querySelectorAll('.total-value');
-    let totalPortfolioValue = 0;
+    // Update total portfolio value initially
+    updateTotalPortfolioValue();
+})
+.catch(error => console.error('Error fetching data:', error));
 
-    totalValueCells.forEach(cell => {
-        totalPortfolioValue += parseFloat(cell.textContent);
-    });
+function saveChanges(row) {
+    const rowData = {
+        name: row.cells[0].textContent,
+        symbol: row.cells[1].textContent,
+        price: row.cells[2].textContent,
+        lastUpdated: row.cells[3].textContent,
+        amount: row.cells[4].querySelector('.amount-input').value,
+        totalValue: row.cells[5].textContent,
+        totalPortfolioValue: document.getElementById('totalPortfolioValue').textContent,
+    };
 
-    const totalPortfolioValueElement = document.querySelector('#totalPortfolioValue');
-    totalPortfolioValueElement.textContent = `Total Value Portfolio: $${totalPortfolioValue.toFixed(2)}`;
+    // Convert rowData to a JSON string
+    const jsonData = JSON.stringify(rowData, null, 2);
+
+    // Create a Blob containing the data
+    const blob = new Blob([jsonData], { type: 'application/json' });
+
+    // Create a link element for downloading the file
+    const downloadLink = document.createElement('a');
+    downloadLink.href = URL.createObjectURL(blob);
+    downloadLink.download = 'crypto_portfolio_change.txt';
+
+    // Append the link to the document and trigger the download
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+
+    // Remove the link from the document
+    document.body.removeChild(downloadLink);
 }
